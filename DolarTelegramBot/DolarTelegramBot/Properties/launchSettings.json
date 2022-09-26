@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "DolarTelegramBot": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7072"
+    },
+    "Docker": {
+      "commandName": "Docker",
+      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
+      "httpPort": 30340,
+      "useSSL": false
+    }
+  }
+}
