@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
@@ -15,41 +16,38 @@ namespace DolarTelegramBot
 {
     public class Dolar
     {
-        private readonly IHttpClientFactory _httpClientFactory;
-
-        public Dolar(IHttpClientFactory httpClientFactory)
+        readonly IHttpClientFactory _httpClientFactory;
+        readonly IMemoryCache _cache;
+        readonly long CHAT_ID;
+        readonly string BOT_KEY;
+        readonly TelegramBotClient Bot;
+        public Dolar(IHttpClientFactory httpClientFactory, IMemoryCache cache)
         {
             _httpClientFactory = httpClientFactory;
+            _cache = cache;
+            CHAT_ID = long.Parse(Environment.GetEnvironmentVariable("CHAT_ID"));
+            BOT_KEY = Environment.GetEnvironmentVariable("BOT_KEY");
+            Bot = new TelegramBotClient(BOT_KEY);
         }
 
         internal Root GitHubBranches { get; private set; }
 
-        private static TelegramBotClient Bot;
-
         [FunctionName("Dolar")]
-        public async Task RunAsync([TimerTrigger("*/5 * * * * *")]TimerInfo myTimer, ILogger log)
+        public async Task RunAsync([TimerTrigger("* */30 * * * *")]TimerInfo myTimer, ILogger log)
         {
-
-            Bot = new TelegramBotClient("1862432027:AAGg5a6K9ADlcYvF8D3ehCAjbGdZCcvNmTc");
-
-            var me = await Bot.GetMeAsync();
-            Console.Title = me.Username;
-
-            Bot.OnApiResponseReceived += Bot_OnApiResponseReceived;
-
-            Bot.StartReceiving(HandleUpdateAsync, HandleErrorAsync);
-
-            Console.WriteLine($"Start listening for @{me.Username}");
-
-            Console.ReadLine();
-            //Bot.StopReceiving();
 
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
 
-            var httpRequestMessage = new HttpRequestMessage(HttpMethod.Get, "https://economia.awesomeapi.com.br/json/last/USD-BRL");
+            Chat c = new()
+            {
+                Id = CHAT_ID
+            };
 
+            var httpRequestMessage = new HttpRequestMessage(HttpMethod.Get, "https://economia.awesomeapi.com.br/json/last/USD-BRL");
             var httpClient = _httpClientFactory.CreateClient();
             var httpResponseMessage = await httpClient.SendAsync(httpRequestMessage);
+
+            log.LogInformation("httpResponseMessage.IsSuccessStatusCode = " + httpResponseMessage.IsSuccessStatusCode);
 
             if (httpResponseMessage.IsSuccessStatusCode)
             {
@@ -57,33 +55,14 @@ namespace DolarTelegramBot
 
                 GitHubBranches = await JsonSerializer.DeserializeAsync<Root>(contentStream);
 
-                log.LogInformation(GitHubBranches.USDBRL.bid);
-            }
-        }
+                var valor = GitHubBranches.USDBRL.bid;
 
-        async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
-        {
-            if (update.Message is Message message)
-            {
-                await botClient.SendTextMessageAsync(message.Chat, "Hello");
-            }
-        }
+                _cache.TryGetValue("DOLAR")
 
-        async Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
-        {
-            if (exception is ApiRequestException apiRequestException)
-            {
-                await botClient.SendTextMessageAsync(123, apiRequestException.ToString());
-            }
-        }
+                await Bot.SendTextMessageAsync(c, GitHubBranches.USDBRL.bid);
+            } else
+                await Bot.SendTextMessageAsync(c, "Erro na consulta");
 
-
-        private ValueTask Bot_OnApiResponseReceived(
-            ITelegramBotClient botClient, 
-            Telegram.Bot.Args.ApiResponseEventArgs args, 
-            System.Threading.CancellationToken cancellationToken = default)
-        {
-            return ValueTask.CompletedTask;
         }
     }
 }
