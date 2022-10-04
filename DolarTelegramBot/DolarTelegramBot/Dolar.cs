@@ -33,7 +33,7 @@ namespace DolarTelegramBot
         internal Root GitHubBranches { get; private set; }
 
         [FunctionName("Dolar")]
-        public async Task RunAsync([TimerTrigger("* */30 * * * *")]TimerInfo myTimer, ILogger log)
+        public async Task RunAsync([TimerTrigger("* */60 * * * *")]TimerInfo myTimer, ILogger log)
         {
 
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
@@ -55,11 +55,15 @@ namespace DolarTelegramBot
 
                 GitHubBranches = await JsonSerializer.DeserializeAsync<Root>(contentStream);
 
-                var valor = GitHubBranches.USDBRL.bid;
+                var valorAtual = GitHubBranches.USDBRL.bid;
 
-                _cache.TryGetValue("DOLAR")
+                _cache.TryGetValue("DOLAR", out string fromCache);
 
-                await Bot.SendTextMessageAsync(c, GitHubBranches.USDBRL.bid);
+                if (fromCache != valorAtual)
+                {
+                    await Bot.SendTextMessageAsync(c, "Valor atual: R$" + valorAtual);
+                    _cache.Set("DOLAR", valorAtual);
+                }                
             } else
                 await Bot.SendTextMessageAsync(c, "Erro na consulta");
 
