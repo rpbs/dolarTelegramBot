@@ -3,7 +3,9 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -33,7 +35,7 @@ namespace DolarTelegramBot
         internal Root GitHubBranches { get; private set; }
 
         [FunctionName("Dolar")]
-        public async Task RunAsync([TimerTrigger("* */60 * * * *")]TimerInfo myTimer, ILogger log)
+        public async Task RunAsync([TimerTrigger("* */30 * * * *")] TimerInfo myTimer, ILogger log)
         {
 
             log.LogInformation($"C# Timer trigger function executed at: {DateTime.Now}");
@@ -59,10 +61,13 @@ namespace DolarTelegramBot
 
                 _cache.TryGetValue("DOLAR", out string fromCache);
 
+                log.LogWarning($"valorAtual = {valorAtual}");
+                log.LogWarning($"fromCache = {fromCache}");
+
                 if (fromCache != valorAtual)
                 {
                     await Bot.SendTextMessageAsync(c, "Valor atual: R$" + valorAtual);
-                    _cache.Set("DOLAR", valorAtual);
+                    _cache.Set("DOLAR", valorAtual, TimeSpan.FromDays(1));
                 }                
             } else
                 await Bot.SendTextMessageAsync(c, "Erro na consulta");
